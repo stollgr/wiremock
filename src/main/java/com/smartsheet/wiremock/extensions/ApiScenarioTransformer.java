@@ -42,6 +42,10 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 
 		if(!scenarioHeader.isSingleValued()) return buildMalformedScenarioResponse(scenarioHeader);
 
+		// At this point: they sent a scenario and we need to validate it:
+		//   1. If it's not one we defined, return 404 to indicate they sent an unknown scenario
+		//   2. If it is one we defined, return error w/ diff
+
 		return new ResponseDefinitionBuilder()
 				.withStatus(422)
 				.withStatusMessage("Unprocessable Entity")
