@@ -11,15 +11,24 @@ import com.github.tomakehurst.wiremock.extension.Parameters;
 import com.github.tomakehurst.wiremock.extension.ResponseDefinitionTransformer;
 import com.github.tomakehurst.wiremock.http.*;
 import joptsimple.internal.Strings;
+import org.skyscreamer.jsonassert.JSONCompare;
+import org.skyscreamer.jsonassert.JSONCompareMode;
+import org.skyscreamer.jsonassert.JSONCompareResult;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.Map;
 
 public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 	private static final String SCENARIO_HEADER_NAME = "Api-Scenario";
 	private static final String CONTENT_TYPE_HEADER_NAME = "Content-Type";
 	private static final String JSON_MIME_TYPE = "application/json";
-	private static final String SCENARIO_FIELD = "scenario";
+	private static final String SCENARIO_SCENARIO_FIELD = "scenario";
+	private static final String SCENARIO_REQUEST_FIELD = "request";
+	private static final String SCENARIO_BODY_FIELD = "body";
+	private static final String SCENARIO_URL_PATH_FIELD = "urlPath";
+	private static final String SCENARIO_HEADERS_FIELD = "headers";
 
 	private static final ResponseDefinition INVALID_SCENARIO_RESPONSE =
 			new ResponseDefinitionBuilder()
@@ -49,7 +58,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 			FileSource files,
 			Parameters parameters) {
 
-		if (isNotMatched(responseDefinition)) return responseDefinition;
+		if (isMatched(responseDefinition)) return responseDefinition;
 		if (!scenarioHeaderIsValid(request)) return INVALID_SCENARIO_RESPONSE;
 
 		JsonNode scenario = getScenario(request);
@@ -58,12 +67,12 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		return getDiffResponse(request, scenario);
 	}
 
-	private boolean isNotMatched(ResponseDefinition responseDefinition) {
-		return responseDefinition.getStatus() == 404;
+	private boolean isMatched(ResponseDefinition responseDefinition) {
+		return responseDefinition.getStatus() != 404;
 	}
 
 	private ResponseDefinition getDiffResponse(Request request, JsonNode scenario) {
-		String diff = getDiff(request, scenario);
+		String diff = RequestDiff.getDiff(request, scenario);
 
 		return new ResponseDefinitionBuilder()
 				.withStatus(400)
@@ -74,11 +83,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 
 
 
-	private String getDiff(Request request, JsonNode scenario) {
-		return "It is different!!";
-		//if matched begin diff
-		//provide error of diff mismatch
-	}
+
 
 	private String getScenarioName(Request request) {
 		HttpHeader scenarioHeader = request.header(SCENARIO_HEADER_NAME);
@@ -92,7 +97,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		String scenarioName = getScenarioName(request);
 
 		for (JsonNode scenario : scenarios) {
-			if (scenario.get(SCENARIO_FIELD).textValue().equals(scenarioName)) return scenario;
+			if (scenario.get(SCENARIO_SCENARIO_FIELD).textValue().equals(scenarioName)) return scenario;
 		}
 
 		return null;
@@ -152,6 +157,91 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 
 		static String forMessage(String message) {
 			return new ErrorBody(message).toJson();
+		}
+	}
+
+	public static class RequestDiff {
+		public static String getDiff(Request request, JsonNode scenario) {
+			return diffHeaders(request, scenario) +
+					diffUrl(request, scenario) +
+					diffBody(request, scenario);
+		}
+
+		private static String diffBody(Request request, JsonNode scenario) {
+			String scenarioBody = scenario.get(SCENARIO_REQUEST_FIELD).get(SCENARIO_BODY_FIELD).toString();
+
+			JSONCompareResult result;
+			try {
+				result = JSONCompare.compareJSON(
+						scenarioBody,
+						request.getBodyAsString(),
+						JSONCompareMode.STRICT_ORDER
+				);
+			} catch (org.json.JSONException e) {
+				e.printStackTrace();
+				throw new RuntimeException(e);
+			}
+
+			return result.getMessage();
+		}
+
+		private static String diffUrl(Request request, JsonNode scenario) {
+			String scenarioRequestUrl = scenario.get(SCENARIO_REQUEST_FIELD).get(SCENARIO_URL_PATH_FIELD).textValue();
+
+			if (request.getUrl().equals(scenarioRequestUrl)) {
+				return "";
+			}
+
+			return formatAssert("url", scenarioRequestUrl, request.getUrl());
+		}
+
+		private static String formatAssert(String assertLabel, String expected, String actual) {
+			return String.format("%s\nExpected: %s\n     got: %s\n", assertLabel, expected, actual);
+		}
+
+		private static String diffHeaders(Request request, JsonNode scenario) {
+			JsonNode scenarioHeaders = scenario.get(SCENARIO_REQUEST_FIELD).get(SCENARIO_HEADERS_FIELD);
+
+			return diffExpectedHeaders(request, scenarioHeaders);// + diffUnexpectedHeaders(request, scenarioHeaders);
+		}
+
+		private static String diffUnexpectedHeaders(Request request, JsonNode scenarioHeaders) {
+			StringBuilder unexpectedHeaderDiff = new StringBuilder();
+			for (HttpHeader header : request.getHeaders().all()) {
+				if (!scenarioHeaders.has(header.key())) {
+					unexpectedHeaderDiff.append(String.format("headers: Contains %s, but not expected\n", header.key()));
+				}
+			}
+
+			return unexpectedHeaderDiff.toString();
+		}
+
+		private static String diffExpectedHeaders(Request request, JsonNode scenarioHeaders) {
+			Iterator<Map.Entry<String, JsonNode>> scenarioHeaderIterator = scenarioHeaders.fields();
+
+			StringBuilder headerDiff = new StringBuilder();
+			while(scenarioHeaderIterator.hasNext()) {
+				Map.Entry<String, JsonNode> header = scenarioHeaderIterator.next();
+
+				headerDiff.append(diffExpectedHeader(request, header));
+			}
+
+			return headerDiff.toString();
+		}
+
+		private static String diffExpectedHeader(Request request, Map.Entry<String, JsonNode> header) {
+			if (!request.containsHeader(header.getKey())) {
+				return String.format("headers: Expected %s, but not found\n", header.getKey());
+			}
+
+			String headerValue = header.getValue().asText();
+			String requestValue = request.getHeader(header.getKey());
+
+			if (!headerValue.equals(requestValue)) {
+				return formatAssert("headers - " + header.getKey(), headerValue, requestValue);
+			}
+
+			return "";
 		}
 	}
 }
