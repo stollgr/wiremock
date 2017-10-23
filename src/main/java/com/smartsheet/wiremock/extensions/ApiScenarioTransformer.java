@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder;
 import com.github.tomakehurst.wiremock.common.FileSource;
 import com.github.tomakehurst.wiremock.common.Json;
+import com.github.tomakehurst.wiremock.common.TextFile;
 import com.github.tomakehurst.wiremock.extension.Parameters;
 import com.github.tomakehurst.wiremock.extension.ResponseDefinitionTransformer;
 import com.github.tomakehurst.wiremock.http.*;
@@ -29,6 +30,8 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 	private static final String SCENARIO_BODY_FIELD = "body";
 	private static final String SCENARIO_URL_PATH_FIELD = "urlPath";
 	private static final String SCENARIO_HEADERS_FIELD = "headers";
+	private static final String SCENARIOS_DIR = "__scenarios";
+	private static final String SCENARIOS_FILE = "scenarios.json";
 
 	private static final ResponseDefinition INVALID_SCENARIO_RESPONSE =
 			new ResponseDefinitionBuilder()
@@ -46,6 +49,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 					.withBody(ErrorBody.forMessage("No scenario exists with provided name"))
 					.build();
 
+
 	@Override
 	public String getName() {
 		return "Sample";
@@ -61,7 +65,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		if (isMatched(responseDefinition)) return responseDefinition;
 		if (!scenarioHeaderIsValid(request)) return INVALID_SCENARIO_RESPONSE;
 
-		JsonNode scenario = getScenario(request);
+		JsonNode scenario = getScenario(request, files);
 		if (scenario == null) return UNKNOWN_SCENARIO_RESPONSE;
 
 		return getDiffResponse(request, scenario);
@@ -76,14 +80,10 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 
 		return new ResponseDefinitionBuilder()
 				.withStatus(400)
-				.withStatusMessage("Unprocessable Entity")
+				.withStatusMessage("Bad Request")
 				.withBody(ErrorBody.forMessage(diff))
 				.build();
 	}
-
-
-
-
 
 	private String getScenarioName(Request request) {
 		HttpHeader scenarioHeader = request.header(SCENARIO_HEADER_NAME);
@@ -91,8 +91,8 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		return scenarioHeader.firstValue();
 	}
 
-	private JsonNode getScenario(Request request) {
-		ArrayNode scenarios = getScenarios();
+	private JsonNode getScenario(Request request, FileSource files) {
+		ArrayNode scenarios = getScenarios(files);
 
 		String scenarioName = getScenarioName(request);
 
@@ -103,11 +103,13 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		return null;
 	}
 
-	private ArrayNode getScenarios() {
+	private ArrayNode getScenarios(FileSource files) {
+		TextFile scenarioFile = files.child(SCENARIOS_DIR).getTextFileNamed(SCENARIOS_FILE);
+
 		ObjectMapper mapper = new ObjectMapper();
 		JsonNode scenarios;
 		try {
-			scenarios = mapper.readTree(new File("./build/resources/main/testScenarios/scenarios.json"));
+			scenarios = mapper.readTree(scenarioFile.readContentsAsString());
 		} catch (IOException e) {
 			e.printStackTrace();
 			throw new RuntimeException(e);
@@ -160,8 +162,8 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		}
 	}
 
-	public static class RequestDiff {
-		public static String getDiff(Request request, JsonNode scenario) {
+	private static class RequestDiff {
+		private static String getDiff(Request request, JsonNode scenario) {
 			return diffHeaders(request, scenario) +
 					diffUrl(request, scenario) +
 					diffBody(request, scenario);
