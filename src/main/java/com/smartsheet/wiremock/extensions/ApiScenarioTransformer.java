@@ -41,15 +41,6 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 					.withBody(ErrorBody.forMessage("No scenario provided"))
 					.build();
 
-	private static final ResponseDefinition UNKNOWN_SCENARIO_RESPONSE =
-			new ResponseDefinitionBuilder()
-					.withStatus(404)
-					.withStatusMessage("Not Found")
-					.withHeader(CONTENT_TYPE_HEADER_NAME, JSON_MIME_TYPE)
-					.withBody(ErrorBody.forMessage("No scenario exists with provided name"))
-					.build();
-
-
 	@Override
 	public String getName() {
 		return "Sample";
@@ -66,7 +57,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		if (!scenarioHeaderIsValid(request)) return INVALID_SCENARIO_RESPONSE;
 
 		JsonNode scenario = getScenario(request, files);
-		if (scenario == null) return UNKNOWN_SCENARIO_RESPONSE;
+		if (scenario == null) return buildUnknownScenarioResponse(request);
 
 		return getDiffResponse(request, scenario);
 	}
@@ -140,6 +131,16 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 				.build();
 	}
 
+	private ResponseDefinition buildUnknownScenarioResponse(Request request) {
+		String scenarioName = getScenarioName (request);
+		return new ResponseDefinitionBuilder()
+				.withStatus(404)
+				.withStatusMessage("Not Found")
+				.withHeader(CONTENT_TYPE_HEADER_NAME, JSON_MIME_TYPE)
+				.withBody(ErrorBody.forMessage("No scenario exists with provided name: " + scenarioName))
+				.build();
+	}
+
 	public static final class ErrorBody {
 		private final String message;
 
@@ -170,12 +171,20 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		}
 
 		private static String diffBody(Request request, JsonNode scenario) {
-			String scenarioBody = scenario.get(SCENARIO_REQUEST_FIELD).get(SCENARIO_BODY_FIELD).toString();
+
+			if(request.getMethod().toString().toUpperCase() == "GET"){
+				return "";
+			}
+
+			JsonNode scenarioBody = scenario.get(SCENARIO_REQUEST_FIELD).get(SCENARIO_BODY_FIELD);
+			if( scenarioBody == null){
+				return "Test scenario's request body was not defined or failed to parse.";
+			}
 
 			JSONCompareResult result;
 			try {
 				result = JSONCompare.compareJSON(
-						scenarioBody,
+						scenarioBody.toString(),
 						request.getBodyAsString(),
 						JSONCompareMode.STRICT_ORDER
 				);
@@ -188,22 +197,28 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		}
 
 		private static String diffUrl(Request request, JsonNode scenario) {
-			String scenarioRequestUrl = scenario.get(SCENARIO_REQUEST_FIELD).get(SCENARIO_URL_PATH_FIELD).textValue();
-
-			if (request.getUrl().equals(scenarioRequestUrl)) {
+			JsonNode scenarioRequest = scenario.get(SCENARIO_REQUEST_FIELD).get(SCENARIO_URL_PATH_FIELD);
+			if(scenarioRequest == null){
+				return "Test scenario's request URL path was not defined or failed to parse.";
+			}
+			String scenarioRequestString = scenarioRequest.textValue();
+			if (request.getUrl().equals(scenarioRequestString)) {
 				return "";
 			}
 
-			return formatAssert("url", scenarioRequestUrl, request.getUrl());
+			return formatAssert("URL", scenarioRequestString, request.getUrl());
 		}
 
 		private static String formatAssert(String assertLabel, String expected, String actual) {
-			return String.format("%s\nExpected: %s\n     got: %s\n", assertLabel, expected, actual);
+			return String.format("%s \nExpected: %s \n     got: %s \n", assertLabel, expected, actual);
 		}
 
 		private static String diffHeaders(Request request, JsonNode scenario) {
 			JsonNode scenarioHeaders = scenario.get(SCENARIO_REQUEST_FIELD).get(SCENARIO_HEADERS_FIELD);
 
+			if(scenarioHeaders == null){
+				return "";
+			}
 			return diffExpectedHeaders(request, scenarioHeaders);// + diffUnexpectedHeaders(request, scenarioHeaders);
 		}
 
