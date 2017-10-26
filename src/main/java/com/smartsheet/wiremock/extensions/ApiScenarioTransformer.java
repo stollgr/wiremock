@@ -28,8 +28,8 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 	private static final String CONTENT_TYPE_HEADER_NAME = "Content-Type";
 	private static final String JSON_MIME_TYPE = "application/json";
 	private static final String SCENARIO_SCENARIO_FIELD = "scenario";
-    private static final String SCENARIO_QUERY_PARAMETERS_FIELD = "queryParameters";
-    private static final String SCENARIO_REQUEST_FIELD = "request";
+	private static final String SCENARIO_QUERY_PARAMETERS_FIELD = "queryParameters";
+	private static final String SCENARIO_REQUEST_FIELD = "request";
 	private static final String SCENARIO_BODY_FIELD = "body";
 	private static final String SCENARIO_URL_PATH_FIELD = "urlPath";
 	private static final String SCENARIO_HEADERS_FIELD = "headers";
@@ -114,11 +114,11 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 	}
 
 	private static boolean scenarioHeaderIsValid(Request request) {
-        HttpHeader scenarioHeader = request.header(SCENARIO_HEADER_NAME);
+		HttpHeader scenarioHeader = request.header(SCENARIO_HEADER_NAME);
 
-        return scenarioHeader.isPresent() && scenarioHeader.isSingleValued();
+		return scenarioHeader.isPresent() && scenarioHeader.isSingleValued();
 
-    }
+	}
 
 	private ResponseDefinition buildUnknownScenarioResponse(Request request) {
 		String scenarioName = getScenarioName (request);
@@ -159,7 +159,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		private static String getDiff(Request request, JsonNode scenario) {
 			return diffHeaders(request, scenario) + " " +
 					diffUrl(request, scenario) + " " +
-                    diffQueryParams(request, scenario) + " " +
+					diffQueryParams(request, scenario) + " " +
 					diffBody(request, scenario).trim();
 		}
 
@@ -282,8 +282,8 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		}
 
 		private static String diffExpectedQueryParam(Request request, Map.Entry<String, JsonNode> queryParam) {
-		    QueryParameter requestParam = request.queryParameter(queryParam.getKey());
-		    if(requestParam == null || requestParam.key() == null || requestParam.key().isEmpty()){
+			QueryParameter requestParam = request.queryParameter(queryParam.getKey());
+			if(requestParam == null || requestParam.key() == null || requestParam.key().isEmpty()){
 				return String.format("Query Parameters: Expected %s, but not found. ", queryParam.getKey());
 			}
 
@@ -294,8 +294,8 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 			return "";
 		}
 
-        private static String diffUnexpectedQueryParams(Request request, JsonNode scenarioQueryParams) {
-            StringBuilder unexpectedQueryParamDiff = new StringBuilder();
+		private static String diffUnexpectedQueryParams(Request request, JsonNode scenarioQueryParams) {
+			StringBuilder unexpectedQueryParamDiff = new StringBuilder();
 
 //            request.queryParameter();
 //
@@ -306,7 +306,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 //            }
 //
 //            return unexpectedHeaderDiff.toString();
-            return "";
-        }
+			return "";
+		}
 	}
 }
