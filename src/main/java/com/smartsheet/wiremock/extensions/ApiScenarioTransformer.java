@@ -293,20 +293,5 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 
 			return "";
 		}
-
-		private static String diffUnexpectedQueryParams(Request request, JsonNode scenarioQueryParams) {
-			StringBuilder unexpectedQueryParamDiff = new StringBuilder();
-
-//            request.queryParameter();
-//
-//            for (HttpHeader header : request.queryParameter()) {
-//                if (!scenarioQueryParams.has(header.key())) {
-//                    unexpectedHeaderDiff.append(String.format("Headers: Contains %s, but not expected. ", header.key()));
-//                }
-//            }
-//
-//            return unexpectedHeaderDiff.toString();
-			return "";
-		}
 	}
 }
