@@ -76,6 +76,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		return new ResponseDefinitionBuilder()
 				.withStatus(400)
 				.withStatusMessage("Bad Request")
+				.withHeader(CONTENT_TYPE_HEADER_NAME, JSON_MIME_TYPE)
 				.withBody(ErrorBody.forMessage(diff, SMARTSHEET_ERROR_CODE))
 				.build();
 	}
