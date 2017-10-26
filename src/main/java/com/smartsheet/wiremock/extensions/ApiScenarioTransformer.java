@@ -211,7 +211,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 				return "";
 			}
 
-			return diffExpectedQueryParams(request, scenarioQueryParams) + diffUnexpectedQueryParams(request, scenarioQueryParams);
+			return diffExpectedQueryParams(request, scenarioQueryParams); // + diffUnexpectedQueryParams(request, scenarioQueryParams);
 
 		}
 
