@@ -20,8 +20,7 @@ import org.skyscreamer.jsonassert.JSONCompareResult;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 
 public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 	private static final String SCENARIO_HEADER_NAME = "Api-Scenario";
@@ -157,10 +156,11 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 
 	private static class RequestDiff {
 		private static String getDiff(Request request, JsonNode scenario) {
-			return diffHeaders(request, scenario) + " " +
-					diffUrl(request, scenario) + " " +
-					diffQueryParams(request, scenario) + " " +
-					diffBody(request, scenario).trim();
+			return String.format("%s %s %s %s",
+					diffHeaders(request, scenario),
+					diffUrl(request, scenario),
+					diffQueryParams(request, scenario),
+					diffBody(request, scenario).trim());
 		}
 
 		private static String diffBody(Request request, JsonNode scenario) {
@@ -211,7 +211,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 				return "";
 			}
 
-			return diffExpectedQueryParams(request, scenarioQueryParams); // + diffUnexpectedQueryParams(request, scenarioQueryParams);
+			return String.format("%s %s",diffExpectedQueryParams(request, scenarioQueryParams), diffUnexpectedQueryParams(request, scenarioQueryParams));
 
 		}
 
@@ -221,12 +221,12 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 			if(scenarioHeaders == null){
 				return "";
 			}
-			return diffExpectedHeaders(request, scenarioHeaders);// + diffUnexpectedHeaders(request, scenarioHeaders);
+			return diffExpectedHeaders(request, scenarioHeaders);
 		}
 
 		private static String formatAssert(String assertLabel, String expected, String actual) {
 
-			return String.format("%s Expected: %s   Got: %s", assertLabel, expected, actual);
+			return String.format("%s Expected: %s Got: %s ", assertLabel, expected, actual);
 		}
 
 		private static String diffExpectedHeaders(Request request, JsonNode scenarioHeaders) {
@@ -251,21 +251,10 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 			String requestValue = request.getHeader(header.getKey());
 
 			if (!headerValue.equals(requestValue)) {
-				return formatAssert("Header - " + header.getKey(), headerValue, requestValue);
+				return formatAssert("Headers:" + header.getKey(), headerValue, requestValue);
 			}
 
 			return "";
-		}
-
-		private static String diffUnexpectedHeaders(Request request, JsonNode scenarioHeaders) {
-			StringBuilder unexpectedHeaderDiff = new StringBuilder();
-			for (HttpHeader header : request.getHeaders().all()) {
-				if (!scenarioHeaders.has(header.key())) {
-					unexpectedHeaderDiff.append(String.format("Headers: Contains %s, but not expected. ", header.key()));
-				}
-			}
-
-			return unexpectedHeaderDiff.toString();
 		}
 
 		private static String diffExpectedQueryParams(Request request, JsonNode scenarioQueryParams) {
@@ -284,14 +273,48 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		private static String diffExpectedQueryParam(Request request, Map.Entry<String, JsonNode> queryParam) {
 			QueryParameter requestParam = request.queryParameter(queryParam.getKey());
 			if(requestParam == null || requestParam.key() == null || requestParam.key().isEmpty()){
-				return String.format("Query Parameters: Expected %s, but not found. ", queryParam.getKey());
+				return String.format("Expected Query Parameters: Expected %s, but not found. ", queryParam.getKey());
 			}
 
 			if (!requestParam.containsValue(queryParam .getValue().asText())) {
-				return formatAssert("Query Parameter - " + queryParam.getKey(), queryParam.getValue().asText(), requestParam.firstValue());
+				return formatAssert("Expected Query Parameter:" + queryParam.getKey(), queryParam.getValue().asText(), requestParam.firstValue());
 			}
 
 			return "";
+		}
+
+
+		private static String diffUnexpectedQueryParams(Request request, JsonNode scenarioQueryParams) {
+
+			StringBuilder queryParamDiff = new StringBuilder();
+
+			String requestQueryParamString = request.getUrl().split("\\?")[1];
+			if(requestQueryParamString == null || requestQueryParamString.isEmpty()){
+				return "";
+			}
+
+			//Populate list of scenario expected query parameter keys.
+			Iterator<Map.Entry<String, JsonNode>> scenarioQueryParamIterator = scenarioQueryParams.fields();
+			List<String> scenarioQueryParamKeys = new ArrayList<>();
+			while (scenarioQueryParamIterator.hasNext()) {
+				Map.Entry<String, JsonNode> scenarioQueryParam = scenarioQueryParamIterator.next();
+				scenarioQueryParamKeys.add(scenarioQueryParam.getKey().trim());
+			}
+
+			//Populate list of query parameter keys found in request.
+			List<String> requestQueryParamKeys = new ArrayList<>();
+			String[] queryParamStrings = requestQueryParamString.split("\\&");
+			for (String queryParam : queryParamStrings) {
+				String[] queryParamString = queryParam.split("\\=");
+				requestQueryParamKeys.add(queryParamString[0].trim());
+			}
+
+			for(String requestParamKey : requestQueryParamKeys) {
+				if (!scenarioQueryParamKeys.contains(requestParamKey.trim())) {
+					queryParamDiff.append(String.format("Query Parameters: Request contained '%s', but was not expected. ", requestParamKey));
+				}
+			}
+            return queryParamDiff.toString();
 		}
 	}
 }
