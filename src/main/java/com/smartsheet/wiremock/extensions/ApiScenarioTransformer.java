@@ -161,7 +161,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 					diffHeaders(request, scenario),
 					diffUrl(request, scenario),
 					diffQueryParams(request, scenario),
-					diffBody(request, scenario).trim());
+					diffBody(request, scenario)).trim();
 		}
 
 		private static String diffBody(Request request, JsonNode scenario) {
@@ -212,7 +212,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 				return "";
 			}
 
-			return String.format("%s %s",diffExpectedQueryParams(request, scenarioQueryParams), diffUnexpectedQueryParams(request, scenarioQueryParams));
+			return String.format("%s %s",diffExpectedQueryParams(request, scenarioQueryParams), diffUnexpectedQueryParams(request, scenarioQueryParams)).trim();
 
 		}
 
@@ -288,27 +288,8 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		private static String diffUnexpectedQueryParams(Request request, JsonNode scenarioQueryParams) {
 
 			StringBuilder queryParamDiff = new StringBuilder();
-
-			String requestQueryParamString = request.getUrl().split("\\?")[1];
-			if(requestQueryParamString == null || requestQueryParamString.isEmpty()){
-				return "";
-			}
-
-			//Populate list of scenario expected query parameter keys.
-			Iterator<Map.Entry<String, JsonNode>> scenarioQueryParamIterator = scenarioQueryParams.fields();
-			List<String> scenarioQueryParamKeys = new ArrayList<>();
-			while (scenarioQueryParamIterator.hasNext()) {
-				Map.Entry<String, JsonNode> scenarioQueryParam = scenarioQueryParamIterator.next();
-				scenarioQueryParamKeys.add(scenarioQueryParam.getKey().trim());
-			}
-
-			//Populate list of query parameter keys found in request.
-			List<String> requestQueryParamKeys = new ArrayList<>();
-			String[] queryParamStrings = requestQueryParamString.split("\\&");
-			for (String queryParam : queryParamStrings) {
-				String[] queryParamString = queryParam.split("\\=");
-				requestQueryParamKeys.add(queryParamString[0].trim());
-			}
+			List<String> requestQueryParamKeys = getRequestQueryParameterKeys(request);
+			List<String> scenarioQueryParamKeys = getScenarioQueryParameterKeys(scenarioQueryParams);
 
 			for(String requestParamKey : requestQueryParamKeys) {
 				if (!scenarioQueryParamKeys.contains(requestParamKey.trim())) {
@@ -316,6 +297,38 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 				}
 			}
             return queryParamDiff.toString();
+		}
+
+		private static List<String> getRequestQueryParameterKeys(Request request) {
+
+			List<String> requestQueryParamKeys = new ArrayList<>();
+			String[] requestQueryParamStrings = request.getUrl().split("\\?");
+			String requestQueryParamString = null;
+			if(requestQueryParamStrings.length == 2){
+				requestQueryParamString = requestQueryParamStrings[1];
+			}
+			if(requestQueryParamString == null || requestQueryParamString.isEmpty()){
+				return requestQueryParamKeys;
+			}
+
+			//Populate list of query parameter keys found in request.
+			String[] queryParamStrings = requestQueryParamString.split("\\&");
+			for (String queryParam : queryParamStrings) {
+				String[] queryParamString = queryParam.split("\\=");
+				requestQueryParamKeys.add(queryParamString[0].trim());
+			}
+			return requestQueryParamKeys;
+		}
+
+		private static List<String> getScenarioQueryParameterKeys(JsonNode scenarioQueryParams) {
+			//Populate list of scenario expected query parameter keys.
+			Iterator<Map.Entry<String, JsonNode>> scenarioQueryParamIterator = scenarioQueryParams.fields();
+			List<String> scenarioQueryParamKeys = new ArrayList<>();
+			while (scenarioQueryParamIterator.hasNext()) {
+				Map.Entry<String, JsonNode> scenarioQueryParam = scenarioQueryParamIterator.next();
+				scenarioQueryParamKeys.add(scenarioQueryParam.getKey().trim());
+			}
+			return scenarioQueryParamKeys;
 		}
 	}
 }
