@@ -35,13 +35,14 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 	private static final String SCENARIOS_DIR = "__scenarios";
 	private static final String SCENARIOS_FILE = "scenarios.json";
 	private static final Integer SMARTSHEET_ERROR_CODE = 9999;
+	private static final String SMARTSHEET_REF_ID = "123abc";
 
 	private static final ResponseDefinition INVALID_SCENARIO_RESPONSE =
 			new ResponseDefinitionBuilder()
 					.withStatus(404)
 					.withStatusMessage("Not Found")
 					.withHeader(CONTENT_TYPE_HEADER_NAME, JSON_MIME_TYPE)
-					.withBody(ErrorBody.forMessage("No scenario provided", SMARTSHEET_ERROR_CODE))
+					.withBody(ErrorBody.forMessage("No scenario provided", SMARTSHEET_ERROR_CODE, SMARTSHEET_REF_ID))
 					.build();
 
 	@Override
@@ -76,7 +77,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 				.withStatus(400)
 				.withStatusMessage("Bad Request")
 				.withHeader(CONTENT_TYPE_HEADER_NAME, JSON_MIME_TYPE)
-				.withBody(ErrorBody.forMessage(diff, SMARTSHEET_ERROR_CODE))
+				.withBody(ErrorBody.forMessage(diff, SMARTSHEET_ERROR_CODE, SMARTSHEET_REF_ID))
 				.build();
 	}
 
@@ -126,32 +127,35 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 				.withStatus(404)
 				.withStatusMessage("Not Found")
 				.withHeader(CONTENT_TYPE_HEADER_NAME, JSON_MIME_TYPE)
-				.withBody(ErrorBody.forMessage("No scenario exists with provided name: " + scenarioName, SMARTSHEET_ERROR_CODE))
+				.withBody(ErrorBody.forMessage("No scenario exists with provided name: " + scenarioName, SMARTSHEET_ERROR_CODE, SMARTSHEET_REF_ID))
 				.build();
 	}
 
 	public static final class ErrorBody {
 		private final String message;
 		private final Integer errorCode;
+		private final String refId;
 
 		@JsonCreator
-		ErrorBody(@JsonProperty ("message") String message, @JsonProperty ("errorCode") Integer errorCode) {
+		ErrorBody(@JsonProperty ("message") String message, @JsonProperty ("errorCode") Integer errorCode, @JsonProperty ("refId") String refId) {
 			this.message = message;
 			this.errorCode = errorCode;
+			this.refId = refId;
 		}
 
 		public String getMessage() {
 			return message;
 		}
-		public Integer getErrorCode () {return errorCode; }
+		public Integer getErrorCode () { return errorCode; }
+		public String getRefId () { return refId; }
 
 		@JsonIgnore
 		String toJson() {
 			return Json.write(this);
 		}
 
-		static String forMessage(String message, Integer errorCode) {
-			return new ErrorBody(message, errorCode).toJson();
+		static String forMessage(String message, Integer errorCode, String refId) {
+			return new ErrorBody(message, errorCode, refId).toJson();
 		}
 	}
 
