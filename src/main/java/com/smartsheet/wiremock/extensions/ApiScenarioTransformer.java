@@ -5,22 +5,17 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder;
-import com.github.tomakehurst.wiremock.common.Errors;
 import com.github.tomakehurst.wiremock.common.FileSource;
 import com.github.tomakehurst.wiremock.common.Json;
 import com.github.tomakehurst.wiremock.common.TextFile;
 import com.github.tomakehurst.wiremock.extension.Parameters;
 import com.github.tomakehurst.wiremock.extension.ResponseDefinitionTransformer;
 import com.github.tomakehurst.wiremock.http.*;
-import joptsimple.internal.Strings;
-import org.json.JSONObject;
-import org.skyscreamer.jsonassert.JSONCompare;
-import org.skyscreamer.jsonassert.JSONCompareMode;
-import org.skyscreamer.jsonassert.JSONCompareResult;
+import static net.javacrumbs.jsonunit.JsonAssert.assertJsonEquals;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.*;
+
 
 public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 	private static final String SCENARIO_HEADER_NAME = "Api-Scenario";
@@ -179,19 +174,19 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 				return "Test scenario's request body was not defined or failed to parse.";
 			}
 
-			JSONCompareResult result;
+			String result = "";
+
+			String scenarioBodyString = scenarioBody.toString();
+			String requestBodyString = request.getBodyAsString();
+
 			try {
-				result = JSONCompare.compareJSON(
-						scenarioBody.toString(),
-						request.getBodyAsString(),
-						JSONCompareMode.STRICT_ORDER
-				);
-			} catch (org.json.JSONException e) {
-				e.printStackTrace();
-				throw new RuntimeException(e);
+				assertJsonEquals(scenarioBodyString, requestBodyString);
+			}
+			catch(AssertionError e) {
+				result = "Body differs from expectation - " + e.getMessage();
 			}
 
-			return result.getMessage();
+			return result;
 		}
 
 		private static String diffUrl(Request request, JsonNode scenario) {
