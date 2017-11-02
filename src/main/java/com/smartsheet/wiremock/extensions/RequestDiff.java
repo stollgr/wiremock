@@ -21,9 +21,10 @@ class RequestDiff {
 	private static final String SCENARIO_HEADERS_FIELD = "headers";
 
 	static String getDiff(Request request, JsonNode scenario) {
-		return String.format("%s %s %s %s",
+		return String.format("%s %s %s %s %s",
 				diffHeaders(request, scenario),
 				diffUrl(request, scenario),
+				diffMethod(request, scenario),
 				diffQueryParams(request, scenario),
 				diffBody(request, scenario)).trim();
 	}
@@ -78,6 +79,22 @@ class RequestDiff {
 		}
 
 		return str;
+	}
+
+	private static String diffMethod(Request request, JsonNode scenario) {
+		JsonNode scenarioMethod = scenario.get(SCENARIO_REQUEST_FIELD).get(SCENARIO_METHOD_FIELD);
+		if(scenarioMethod == null){
+			return "Test scenario's request method was not defined or failed to parse.";
+		}
+
+		String scenarioMethodString = scenarioMethod.textValue().toUpperCase();
+		String requestMethodString = request.getMethod().toString().toUpperCase();
+
+		if (requestMethodString.equals(scenarioMethodString)) {
+			return "";
+		}
+
+		return formatAssert("HTTP Method Match", scenarioMethodString, requestMethodString);
 	}
 
 	private static String diffQueryParams(Request request, JsonNode scenario) {
