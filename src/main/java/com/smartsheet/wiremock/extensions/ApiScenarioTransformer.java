@@ -11,10 +11,8 @@ import com.github.tomakehurst.wiremock.common.TextFile;
 import com.github.tomakehurst.wiremock.extension.Parameters;
 import com.github.tomakehurst.wiremock.extension.ResponseDefinitionTransformer;
 import com.github.tomakehurst.wiremock.http.*;
-import static net.javacrumbs.jsonunit.JsonAssert.assertJsonEquals;
 
 import java.io.IOException;
-import java.util.*;
 
 
 public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
@@ -22,11 +20,6 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 	private static final String CONTENT_TYPE_HEADER_NAME = "Content-Type";
 	private static final String JSON_MIME_TYPE = "application/json";
 	private static final String SCENARIO_SCENARIO_FIELD = "scenario";
-	private static final String SCENARIO_QUERY_PARAMETERS_FIELD = "queryParameters";
-	private static final String SCENARIO_REQUEST_FIELD = "request";
-	private static final String SCENARIO_BODY_FIELD = "body";
-	private static final String SCENARIO_URL_PATH_FIELD = "urlPath";
-	private static final String SCENARIO_HEADERS_FIELD = "headers";
 	private static final String SCENARIOS_DIR = "__scenarios";
 	private static final String SCENARIOS_FILE = "scenarios.json";
 	private static final Integer SMARTSHEET_ERROR_CODE = 9999;
@@ -52,22 +45,27 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 			FileSource files,
 			Parameters parameters) {
 
-		if (isMatched(responseDefinition)) return responseDefinition;
 		if (!scenarioHeaderIsValid(request)) return INVALID_SCENARIO_RESPONSE;
 
 		JsonNode scenario = getScenario(request, files);
 		if (scenario == null) return buildUnknownScenarioResponse(request);
 
-		return getDiffResponse(request, scenario);
+		String diff = RequestDiff.getDiff(request, scenario);
+
+		if (isMatched(responseDefinition) && hasNoDiff(diff)) return responseDefinition;
+
+		return buildDiffResponse(diff);
 	}
 
 	private boolean isMatched(ResponseDefinition responseDefinition) {
 		return responseDefinition.getStatus() != 404;
 	}
 
-	private ResponseDefinition getDiffResponse(Request request, JsonNode scenario) {
-		String diff = RequestDiff.getDiff(request, scenario);
+	private boolean hasNoDiff(String diff) {
+		return diff.isEmpty();
+	}
 
+	private ResponseDefinition buildDiffResponse(String diff) {
 		return new ResponseDefinitionBuilder()
 				.withStatus(400)
 				.withStatusMessage("Bad Request")
@@ -154,180 +152,5 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		}
 	}
 
-	private static class RequestDiff {
-		private static String getDiff(Request request, JsonNode scenario) {
-			return String.format("%s %s %s %s",
-					diffHeaders(request, scenario),
-					diffUrl(request, scenario),
-					diffQueryParams(request, scenario),
-					diffBody(request, scenario)).trim();
-		}
 
-		private static String diffBody(Request request, JsonNode scenario) {
-
-			if(request.getMethod().toString().toUpperCase() == "GET"){
-				return "";
-			}
-
-			JsonNode scenarioBody = scenario.get(SCENARIO_REQUEST_FIELD).get(SCENARIO_BODY_FIELD);
-			if( scenarioBody == null){
-				return "Test scenario's request body was not defined or failed to parse.";
-			}
-
-			String result = "";
-
-			String scenarioBodyString = scenarioBody.toString();
-			String requestBodyString = request.getBodyAsString();
-
-			try {
-				assertJsonEquals(scenarioBodyString, requestBodyString);
-			}
-			catch(AssertionError e) {
-				result = "Body differs from expectation - " + e.getMessage();
-			}
-
-			return result;
-		}
-
-		private static String diffUrl(Request request, JsonNode scenario) {
-			JsonNode scenarioURL = scenario.get(SCENARIO_REQUEST_FIELD).get(SCENARIO_URL_PATH_FIELD);
-			if(scenarioURL == null){
-				return "Test scenario's request URL path was not defined or failed to parse.";
-			}
-			String scenarioURLString = scenarioURL.textValue();
-
-			String requestURLString = request.getUrl().split("\\?")[0];
-
-			if (requestURLString.equals(scenarioURLString)) {
-				return "";
-			}
-
-			return formatAssert("URL Match", scenarioURLString, requestURLString);
-		}
-
-		private static String diffQueryParams(Request request, JsonNode scenario) {
-			JsonNode scenarioQueryParams = scenario.get(SCENARIO_REQUEST_FIELD).get(SCENARIO_QUERY_PARAMETERS_FIELD);
-			if(scenarioQueryParams == null) {
-				return "";
-			}
-
-			return String.format("%s %s",diffExpectedQueryParams(request, scenarioQueryParams), diffUnexpectedQueryParams(request, scenarioQueryParams)).trim();
-
-		}
-
-		private static String diffHeaders(Request request, JsonNode scenario) {
-			JsonNode scenarioHeaders = scenario.get(SCENARIO_REQUEST_FIELD).get(SCENARIO_HEADERS_FIELD);
-
-			if(scenarioHeaders == null){
-				return "";
-			}
-			return diffExpectedHeaders(request, scenarioHeaders);
-		}
-
-		private static String formatAssert(String assertLabel, String expected, String actual) {
-
-			return String.format("%s Expected: %s Got: %s ", assertLabel, expected, actual);
-		}
-
-		private static String diffExpectedHeaders(Request request, JsonNode scenarioHeaders) {
-			Iterator<Map.Entry<String, JsonNode>> scenarioHeaderIterator = scenarioHeaders.fields();
-
-			StringBuilder headerDiff = new StringBuilder();
-			while(scenarioHeaderIterator.hasNext()) {
-				Map.Entry<String, JsonNode> header = scenarioHeaderIterator.next();
-
-				headerDiff.append(diffExpectedHeader(request, header));
-			}
-
-			return headerDiff.toString();
-		}
-
-		private static String diffExpectedHeader(Request request, Map.Entry<String, JsonNode> header) {
-			if (!request.containsHeader(header.getKey())) {
-				return String.format("Headers: Expected %s, but not found. ", header.getKey());
-			}
-
-			String headerValue = header.getValue().asText();
-			String requestValue = request.getHeader(header.getKey());
-
-			if (!headerValue.equals(requestValue)) {
-				return formatAssert("Headers:" + header.getKey(), headerValue, requestValue);
-			}
-
-			return "";
-		}
-
-		private static String diffExpectedQueryParams(Request request, JsonNode scenarioQueryParams) {
-			Iterator<Map.Entry<String, JsonNode>> scenarioQueryParamIterator = scenarioQueryParams.fields();
-
-			StringBuilder queryParamDiff = new StringBuilder();
-			while(scenarioQueryParamIterator.hasNext()) {
-				Map.Entry<String, JsonNode> queryParam = scenarioQueryParamIterator.next();
-
-				queryParamDiff.append(diffExpectedQueryParam(request, queryParam));
-			}
-
-			return queryParamDiff.toString();
-		}
-
-		private static String diffExpectedQueryParam(Request request, Map.Entry<String, JsonNode> queryParam) {
-			QueryParameter requestParam = request.queryParameter(queryParam.getKey());
-			if(requestParam == null || requestParam.key() == null || requestParam.key().isEmpty()){
-				return String.format("Expected Query Parameters: Expected %s, but not found. ", queryParam.getKey());
-			}
-
-			if (!requestParam.containsValue(queryParam .getValue().asText())) {
-				return formatAssert("Expected Query Parameter:" + queryParam.getKey(), queryParam.getValue().asText(), requestParam.firstValue());
-			}
-
-			return "";
-		}
-
-
-		private static String diffUnexpectedQueryParams(Request request, JsonNode scenarioQueryParams) {
-
-			StringBuilder queryParamDiff = new StringBuilder();
-			List<String> requestQueryParamKeys = getRequestQueryParameterKeys(request);
-			List<String> scenarioQueryParamKeys = getScenarioQueryParameterKeys(scenarioQueryParams);
-
-			for(String requestParamKey : requestQueryParamKeys) {
-				if (!scenarioQueryParamKeys.contains(requestParamKey.trim())) {
-					queryParamDiff.append(String.format("Query Parameters: Request contained '%s', but was not expected. ", requestParamKey));
-				}
-			}
-            return queryParamDiff.toString();
-		}
-
-		private static List<String> getRequestQueryParameterKeys(Request request) {
-
-			List<String> requestQueryParamKeys = new ArrayList<>();
-			String[] requestQueryParamStrings = request.getUrl().split("\\?");
-			String requestQueryParamString = null;
-			if(requestQueryParamStrings.length == 2){
-				requestQueryParamString = requestQueryParamStrings[1];
-			}
-			if(requestQueryParamString == null || requestQueryParamString.isEmpty()){
-				return requestQueryParamKeys;
-			}
-
-			//Populate list of query parameter keys found in request.
-			String[] queryParamStrings = requestQueryParamString.split("\\&");
-			for (String queryParam : queryParamStrings) {
-				String[] queryParamString = queryParam.split("\\=");
-				requestQueryParamKeys.add(queryParamString[0].trim());
-			}
-			return requestQueryParamKeys;
-		}
-
-		private static List<String> getScenarioQueryParameterKeys(JsonNode scenarioQueryParams) {
-			//Populate list of scenario expected query parameter keys.
-			Iterator<Map.Entry<String, JsonNode>> scenarioQueryParamIterator = scenarioQueryParams.fields();
-			List<String> scenarioQueryParamKeys = new ArrayList<>();
-			while (scenarioQueryParamIterator.hasNext()) {
-				Map.Entry<String, JsonNode> scenarioQueryParam = scenarioQueryParamIterator.next();
-				scenarioQueryParamKeys.add(scenarioQueryParam.getKey().trim());
-			}
-			return scenarioQueryParamKeys;
-		}
-	}
 }
