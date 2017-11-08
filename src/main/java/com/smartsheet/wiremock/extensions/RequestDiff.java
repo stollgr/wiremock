@@ -163,11 +163,11 @@ class RequestDiff {
 
 	private static String diffExpectedQueryParam(Request request, Map.Entry<String, JsonNode> queryParam) {
 		QueryParameter requestParam = request.queryParameter(queryParam.getKey());
-		if(requestParam == null || requestParam.key() == null || requestParam.key().isEmpty()){
+		if(requestParam == null || !requestParam.isPresent()) {
 			return String.format("Expected Query Parameters: Expected %s, but not found. ", queryParam.getKey());
 		}
 
-		if (!requestParam.containsValue(queryParam .getValue().asText())) {
+		if (!requestParam.containsValue(queryParam.getValue().asText())) {
 			return formatAssert("Expected Query Parameter:" + queryParam.getKey(), queryParam.getValue().asText(), requestParam.firstValue());
 		}
 
