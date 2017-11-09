@@ -11,6 +11,7 @@ import com.github.tomakehurst.wiremock.common.TextFile;
 import com.github.tomakehurst.wiremock.extension.Parameters;
 import com.github.tomakehurst.wiremock.extension.ResponseDefinitionTransformer;
 import com.github.tomakehurst.wiremock.http.*;
+import static java.lang.System.out;
 
 import java.io.IOException;
 
@@ -22,6 +23,7 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 	private static final String SCENARIO_SCENARIO_FIELD = "scenario";
 	private static final String SCENARIOS_DIR = "__scenarios";
 	private static final String SCENARIOS_FILE = "scenarios.json";
+	private static final String LOGGING_ENABLED_FILE = ".logging_enabled";
 	private static final Integer SMARTSHEET_ERROR_CODE = 9999;
 	private static final String SMARTSHEET_REF_ID = "123abc";
 
@@ -32,6 +34,8 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 					.withHeader(CONTENT_TYPE_HEADER_NAME, JSON_MIME_TYPE)
 					.withBody(ErrorBody.forMessage("No scenario provided", SMARTSHEET_ERROR_CODE, SMARTSHEET_REF_ID))
 					.build();
+
+	private boolean isLoggingEnabled = false;
 
 	@Override
 	public String getName() {
@@ -45,16 +49,36 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 			FileSource files,
 			Parameters parameters) {
 
-		if (!scenarioHeaderIsValid(request)) return INVALID_SCENARIO_RESPONSE;
+		SetLoggingEnabled(files);
+
+		if (!scenarioHeaderIsValid(request)) {
+			logInfo("Received invalid request header");
+			return INVALID_SCENARIO_RESPONSE;
+		}
 
 		JsonNode scenario = getScenario(request, files);
 		if (scenario == null) return buildUnknownScenarioResponse(request);
 
 		String diff = RequestDiff.getDiff(request, scenario);
 
-		if (isMatched(responseDefinition) && hasNoDiff(diff)) return responseDefinition;
+		if (isMatched(responseDefinition) && hasNoDiff(diff)) {
+			logInfo("- Successfully matched");
+			return responseDefinition;
+		}
+
+		logInfo("- Match failed");
 
 		return buildDiffResponse(diff);
+	}
+
+	private void SetLoggingEnabled(FileSource files) {
+		isLoggingEnabled = files.child(SCENARIOS_DIR).child(LOGGING_ENABLED_FILE).exists();
+	}
+
+	private void logInfo(String message) {
+		if (isLoggingEnabled) {
+			out.println(message);
+		}
 	}
 
 	private boolean isMatched(ResponseDefinition responseDefinition) {
@@ -86,8 +110,13 @@ public class ApiScenarioTransformer extends ResponseDefinitionTransformer {
 		String scenarioName = getScenarioName(request);
 
 		for (JsonNode scenario : scenarios) {
-			if (scenario.get(SCENARIO_SCENARIO_FIELD).textValue().equals(scenarioName)) return scenario;
+			if (scenario.get(SCENARIO_SCENARIO_FIELD).textValue().equals(scenarioName)) {
+				logInfo(String.format("Received request for '%s'", scenarioName));
+				return scenario;
+			}
 		}
+
+		logInfo(String.format("Could not find scenario '%s'", scenarioName));
 
 		return null;
 	}
